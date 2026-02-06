@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智慧健康 Phase 2 (RWD Dual Mode)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Noto Sans TC', 'sans-serif'] },
+                    colors: {
+                        mvp: {
+                            main: '#00b09b',
+                            light: '#e0f7fa',
+                            gradStart: '#00b09b',
+                            gradEnd: '#96c93d'
+                        },
+                        femh: {
+                            100: '#e0f7fa',
+                            500: '#00b09b',
+                            600: '#008ba3'
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(100%)' }, '100%': { transform: 'translateY(0)' } },
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* --- 核心策略：雙模式切換 (Dual Mode) --- */
+
+        /* 1. 預設：手機版優先 (Mobile First) */
+        body {
+            background-color: #fff; /* 手機上不需要深色背景 */
+            margin: 0;
+            height: 100vh;
+            overflow: hidden; /* 防止 body 捲動 */
+        }
+
+        .iphone-frame {
+            width: 100%;       /* 寬度撐滿 */
+            height: 100%;      /* 高度撐滿 */
+            border: none;      /* 不要邊框 */
+            border-radius: 0;  /* 不要圓角 */
+            box-shadow: none;  /* 不要陰影 */
+            background-color: #f8f9fa;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .notch {
+            display: none;     /* 手機上隱藏假瀏海 */
+        }
+
+        /* 2. 電腦版覆寫 (Desktop Override) */
+        /* 當螢幕寬度大於 768px 時，變身為模擬器 */
+        @media (min-width: 768px) {
+            body {
+                background-color: #e5e7eb; /* 電腦版背景色 (淺灰) */
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .iphone-frame {
+                width: 375px;      /* 鎖定寬度，不再縮放 */
+                height: 812px;     /* 鎖定高度 */
+                border: 12px solid #1f2937; /* 加回邊框 */
+                border-radius: 3rem;        /* 加回圓角 */
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* 加回陰影 */
+                margin: 20px auto; /* 加上外距 */
+            }
+
+            .notch {
+                display: block;    /* 電腦版顯示假瀏海 */
+                position: absolute; 
+                top: 0; 
+                left: 50%; 
+                transform: translateX(-50%); 
+                width: 120px; 
+                height: 25px; 
+                background-color: #1f2937; 
+                border-bottom-left-radius: 16px; 
+                border-bottom-right-radius: 16px; 
+                z-index: 50;
+            }
+        }
+        
+        #checkinModal { transition: opacity 0.3s ease; }
+        #checkinModal.active { display: flex; }
+        
+        .store-card { background: white; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 20px; border: 1px solid #fef3c7; }
+        .game-img { width: 100%; height: 220px; object-fit: cover; border-radius: 12px; margin-bottom: 16px; border: 1px solid #f3f4f6; background-color: #f3f4f6; }
+        
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+    </style>
+</head>
+<body class="font-sans text-gray-800">
+
+    <div class="iphone-frame">
+        <div class="notch"></div>
+        <div class="w-full pt-3 pb-2 px-6 bg-white z-20 flex justify-between items-end border-b border-gray-50">
+            <span class="text-xs font-bold text-gray-800">09:41</span>
+            <div class="flex gap-1.5 text-gray-800">
+                <i class="fas fa-signal text-xs"></i><i class="fas fa-wifi text-xs"></i><i class="fas fa-battery-full text-xs"></i>
+            </div>
+        </div>
+
+        <div id="content-area" class="flex-1 overflow-y-auto no-scrollbar relative bg-[#f8f9fa] pb-16">
+            
+            <!-- VIEW 1: 首頁 -->
+            <div id="view-home" class="view-section p-4 space-y-4">
+                <div class="flex justify-between items-center mb-2 px-1">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-gray-200 overflow-hidden border-2 border-white shadow-sm"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" /></div>
+                        <div><p class="text-[10px] text-gray-500">早安,</p><h2 class="font-bold text-lg text-gray-800 leading-tight">王大明</h2></div>
+                    </div>
+                    <button class="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-600 hover:text-mvp-main transition" onclick="switchView('shop')"><i class="fas fa-shopping-bag"></i></button>
+                </div>
+
+                <div class="bg-gradient-to-r from-[#00b09b] to-[#96c93d] p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-4 relative z-10">
+                        <div><p class="text-xs opacity-90 mb-1 font-bold">樂活點餘額</p><div class="flex items-baseline gap-2"><span class="text-4xl font-bold tracking-tight">1,250</span><span class="text-sm font-medium">Pts</span></div></div>
+                        <div class="bg-white/20 backdrop-blur-sm border border-white/30 px-3 py-1 rounded-full text-xs font-bold shadow-sm">🏆 健康探索家 Lv.4</div>
+                    </div>
+                    <div class="relative z-10">
+                        <div class="flex justify-between text-[10px] mb-1 opacity-90 font-medium"><span>距離下一等級</span><span>還差 1,250 Pts</span></div>
+                        <div class="w-full bg-black/20 h-2 rounded-full overflow-hidden"><div class="bg-white h-full rounded-full w-[50%] shadow-sm"></div></div>
+                    </div>
+                </div>
+
+                <!-- 今日任務 -->
+                <div>
+                    <div class="flex justify-between items-center mb-3"><h3 class="font-bold text-gray-700 text-sm ml-1 flex items-center gap-2"><i class="fas fa-list-check text-orange-500"></i> 今日任務</h3><button class="text-[10px] text-gray-400 bg-white px-2 py-1 rounded border border-gray-200">前往任務中心 <i class="fas fa-arrow-right"></i></button></div>
+                    <div class="space-y-3">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-femh-100 text-mvp-main flex items-center justify-center text-lg"><i class="fas fa-file-medical"></i></div><div><h4 class="font-bold text-sm text-gray-800">每日健康日誌</h4><p class="text-[10px] text-gray-500">紀錄生理數據</p></div></div>
+                            <button onclick="toggleModal(true)" class="bg-mvp-main text-white text-xs px-3 py-1.5 rounded-full font-bold">前往</button>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-lg"><i class="fas fa-gamepad"></i></div><div><h4 class="font-bold text-sm text-gray-800">腦健康鍛鍊</h4><p class="text-[10px] text-gray-500">完成今日訓練</p></div></div>
+                            <button onclick="switchView('training')" class="bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full font-bold">前往</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 亞東衛教專區 -->
+                <div class="mt-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-bold text-gray-700 text-sm ml-1 flex items-center gap-2">
+                            <i class="fas fa-book-medical text-femh-500"></i> 亞東衛教專區
+                        </h3>
+                        <button onclick="switchView('articles')" class="text-[10px] text-gray-400 bg-white px-2 py-1 rounded border border-gray-200 hover:text-femh-600 transition">查看更多 <i class="fas fa-arrow-right"></i></button>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden" id="home-articles-container">
+                        <!-- 由 JS 渲染 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: 衛教文章列表 -->
+            <div id="view-articles" class="view-section hidden p-0 h-full flex flex-col bg-gray-50">
+                <div class="p-4 bg-white border-b flex items-center gap-3 shadow-sm z-10">
+                    <button onclick="switchView('home')"><i class="fas fa-arrow-left text-gray-600"></i></button>
+                    <h2 class="font-bold text-lg text-gray-800">衛教文章</h2>
+                </div>
+                <div id="all-articles-container" class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar pb-24">
+                    <!-- 由 JS 渲染 -->
+                </div>
+            </div>
+
+            <!-- VIEW 2: 訓練 -->
+            <div id="view-training" class="view-section hidden p-4 space-y-4">
+                <div class="bg-white p-5 rounded-b-3xl shadow-sm border-b border-gray-50 mb-2"><h2 class="text-xl font-bold text-gray-800 tracking-tight">腦健康訓練</h2><p class="text-xs text-gray-500 mt-1">針對核心認知維度設計</p></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3"><div class="w-10 h-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center text-lg"><i class="fas fa-brain"></i></div><div><h4 class="font-bold text-sm">記憶力訓練</h4><p class="text-[10px] text-gray-400">圖形配對</p></div><button onclick="simulateGame('記憶力', 90)" class="w-full bg-gray-50 text-gray-600 text-xs py-2 rounded-lg font-bold">模擬完成</button><button onclick="showLeaderboard('記憶力')" class="w-full border border-gray-200 text-gray-400 text-[10px] py-1 rounded-lg">查看排行榜</button></div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3"><div class="w-10 h-10 rounded-lg bg-yellow-100 text-yellow-600 flex items-center justify-center text-lg"><i class="fas fa-eye"></i></div><div><h4 class="font-bold text-sm">專注力訓練</h4><p class="text-[10px] text-gray-400">視覺追蹤</p></div><button onclick="simulateGame('專注力', 85)" class="w-full bg-gray-50 text-gray-600 text-xs py-2 rounded-lg font-bold">模擬完成</button><button onclick="showLeaderboard('專注力')" class="w-full border border-gray-200 text-gray-400 text-[10px] py-1 rounded-lg">查看排行榜</button></div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3"><div class="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-lg"><i class="fas fa-tasks"></i></div><div><h4 class="font-bold text-sm">執行力訓練</h4><p class="text-[10px] text-gray-400">找零錢大師</p></div><button onclick="simulateGame('執行力', 88)" class="w-full bg-gray-50 text-gray-600 text-xs py-2 rounded-lg font-bold">模擬完成</button><button onclick="showLeaderboard('執行力')" class="w-full border border-gray-200 text-gray-400 text-[10px] py-1 rounded-lg">查看排行榜</button></div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3"><div class="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center text-lg"><i class="fas fa-shield-alt"></i></div><div><h4 class="font-bold text-sm">安心護腦</h4><p class="text-[10px] text-gray-400">綜合放鬆</p></div><button onclick="simulateGame('安心護腦', 100)" class="w-full bg-gray-50 text-gray-600 text-xs py-2 rounded-lg font-bold">模擬完成</button><button onclick="showLeaderboard('安心護腦')" class="w-full border border-gray-200 text-gray-400 text-[10px] py-1 rounded-lg">查看排行榜</button></div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: 篩檢 -->
+            <div id="view-screening" class="view-section hidden p-4 space-y-4">
+                <div class="bg-white p-5 rounded-b-3xl shadow-sm border-b border-gray-50 mb-2"><h2 class="text-xl font-bold text-gray-800 tracking-tight">健康篩檢</h2><p class="text-xs text-gray-500 mt-1">透過情境互動，了解您的狀態</p></div>
+                <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-5 rounded-2xl shadow-sm border border-orange-200 relative overflow-hidden">
+                    <div class="relative z-10"><div class="flex items-center gap-2 mb-2"><span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">情境互動</span><h3 class="font-bold text-lg text-gray-800">幸福柑仔店：開店任務</h3></div><p class="text-xs text-gray-600 mb-4 w-3/4">化身一日店長，處理進貨、結帳與鄰居互動。</p><button onclick="startStoreGame()" class="bg-orange-500 text-white px-5 py-2 rounded-full text-sm font-bold shadow-lg active:scale-95 transition">開始開店 (0/8)</button></div>
+                    <i class="fas fa-store absolute -right-4 -bottom-4 text-8xl text-orange-200 opacity-50"></i>
+                </div>
+                <div class="bg-gradient-to-br from-pink-50 to-pink-100 p-5 rounded-2xl shadow-sm border border-pink-200 relative overflow-hidden">
+                    <div class="relative z-10"><div class="flex items-center gap-2 mb-2"><span class="bg-pink-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">聊天檢測</span><h3 class="font-bold text-lg text-gray-800">小樂的心情溫度計</h3></div><p class="text-xs text-gray-600 mb-4 w-3/4">與小樂聊聊天，整理最近的情緒與睡眠品質。</p><button onclick="startMoodChat()" class="bg-pink-500 text-white px-5 py-2 rounded-full text-sm font-bold shadow-lg active:scale-95 transition">開始聊天</button></div>
+                    <i class="fas fa-comments absolute -right-4 -bottom-4 text-8xl text-pink-200 opacity-50"></i>
+                </div>
+            </div>
+
+            <!-- VIEW 4: 分析 -->
+            <div id="view-analysis" class="view-section hidden h-full flex flex-col">
+                <div class="p-5 pt-6 pb-2 bg-[#f8f9fa] z-10 flex-none"><h2 class="text-xl font-bold tracking-tight text-gray-800">數據與趨勢分析</h2></div>
+                <div class="flex-1 overflow-y-auto p-5 space-y-6 no-scrollbar pb-24">
+                    <!-- 生理數據輸入 (預設展開) -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                        <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-gray-700 text-sm flex items-center gap-2"><i class="fas fa-heartbeat text-red-500"></i> 生理數據錄入</h3><button onclick="simulateLinkDevice('Health')" class="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded border hover:bg-gray-200"><i class="fas fa-link"></i> 連動裝置</button></div>
+                        <div id="input-setup-mode" class=""><p class="text-xs text-gray-500 mb-3 bg-yellow-50 p-2 rounded text-center">👋 初次見面！請先設定基本資料</p><div class="flex gap-3 mb-3"><input id="setup-height" type="number" placeholder="身高 (cm)" class="w-full p-2 border rounded-lg text-sm text-center bg-gray-50"><input id="setup-weight" type="number" placeholder="體重 (kg)" class="w-full p-2 border rounded-lg text-sm text-center bg-gray-50"></div><button onclick="completeSetup()" class="w-full bg-mvp-main text-white py-2 rounded-lg text-sm font-bold shadow-sm">建立健康檔案</button></div>
+                        <div id="input-daily-mode" class="hidden space-y-4">
+                            <div class="space-y-2"><label class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">今日心情</label><div class="flex justify-between gap-1"><button class="mood-btn flex-1 py-2 bg-gray-50 rounded-lg text-lg hover:bg-yellow-50 border border-transparent" onclick="selectMood(this)">😀</button><button class="mood-btn flex-1 py-2 bg-gray-50 rounded-lg text-lg hover:bg-yellow-50 border border-transparent" onclick="selectMood(this)">🙂</button><button class="mood-btn flex-1 py-2 bg-gray-50 rounded-lg text-lg hover:bg-yellow-50 border border-transparent" onclick="selectMood(this)">😐</button><button class="mood-btn flex-1 py-2 bg-gray-50 rounded-lg text-lg hover:bg-yellow-50 border border-transparent" onclick="selectMood(this)">😟</button><button class="mood-btn flex-1 py-2 bg-gray-50 rounded-lg text-lg hover:bg-yellow-50 border border-transparent" onclick="selectMood(this)">😫</button></div></div>
+                            <div class="bg-gray-50 p-3 rounded-xl border border-gray-100"><p class="text-[10px] font-bold text-gray-500 mb-2">三高與心肺指標</p><div class="grid grid-cols-3 gap-2 mb-2"><div class="flex-1"><p class="text-[9px] text-gray-400 mb-1">收縮壓</p><input id="daily-sys" type="number" placeholder="-" class="w-full p-2 border rounded-lg text-xs text-center bg-white focus:border-mvp-main outline-none"></div><div class="flex-1"><p class="text-[9px] text-gray-400 mb-1">舒張壓</p><input id="daily-dia" type="number" placeholder="-" class="w-full p-2 border rounded-lg text-xs text-center bg-white focus:border-mvp-main outline-none"></div><div class="flex-1"><p class="text-[9px] text-gray-400 mb-1">心跳</p><input id="daily-bpm" type="number" placeholder="-" class="w-full p-2 border rounded-lg text-xs text-center bg-white focus:border-mvp-main outline-none"></div></div><div class="grid grid-cols-2 gap-2"><div class="flex-1"><p class="text-[9px] text-gray-400 mb-1">血糖 (mg/dL)</p><input id="daily-glucose" type="number" placeholder="-" class="w-full p-2 border rounded-lg text-xs text-center bg-white focus:border-mvp-main outline-none"></div><div class="flex-1"><p class="text-[9px] text-gray-400 mb-1">睡眠 (hr)</p><input id="daily-sleep" type="number" placeholder="-" class="w-full p-2 border rounded-lg text-xs text-center bg-white focus:border-mvp-main outline-none"></div></div></div>
+                            <button onclick="alert('今日數據已儲存！')" class="w-full bg-mvp-main text-white py-2.5 rounded-xl text-sm font-bold shadow-md active:scale-95 transition">儲存紀錄</button>
+                        </div>
+                    </div>
+                    <!-- 步數輸入 -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                        <h3 class="font-bold text-gray-700 text-sm mb-3 flex items-center gap-2"><i class="fas fa-shoe-prints text-orange-500"></i> 今日步數</h3>
+                        <div class="flex gap-3 items-center"><div class="relative flex-1"><input id="analysis-steps" type="number" placeholder="0" class="w-full p-3 bg-orange-50 rounded-xl text-lg font-bold text-orange-600 border-none outline-none text-center"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-orange-300">steps</span></div><button onclick="simulateLinkDevice('Step')" class="bg-white border border-gray-200 p-3 rounded-xl text-gray-500 hover:text-orange-500 transition shadow-sm"><i class="fas fa-sync-alt"></i></button></div>
+                    </div>
+                    <!-- 趨勢圖表 -->
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                        <div class="flex bg-gray-100 p-1 rounded-lg mb-4"><button id="mode-brain" onclick="toggleChartMode('brain')" class="flex-1 py-1.5 text-xs font-bold rounded bg-white shadow-sm text-mvp-main transition">腦力趨勢</button><button id="mode-health" onclick="toggleChartMode('health')" class="flex-1 py-1.5 text-xs font-medium text-gray-500 transition">生理趨勢</button></div>
+                        <div id="filters-brain" class="flex gap-2 overflow-x-auto no-scrollbar mb-4 pb-1"><button class="chart-filter active px-3 py-1 bg-mvp-main text-white rounded-full text-[10px] font-bold whitespace-nowrap" onclick="updateChartData('brain', 'attention')">注意力</button><button class="chart-filter px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] whitespace-nowrap" onclick="updateChartData('brain', 'executive')">執行力</button><button class="chart-filter px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] whitespace-nowrap" onclick="updateChartData('brain', 'focus')">專注力</button></div>
+                        <div id="filters-health" class="hidden flex-col gap-2 mb-4">
+                            <div class="flex gap-2 overflow-x-auto no-scrollbar"><button class="chart-filter-h-metric active px-3 py-1 bg-blue-500 text-white rounded-full text-[10px] font-bold whitespace-nowrap" onclick="updateChartHealthMetric('bp', this)">血壓</button><button class="chart-filter-h-metric px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] whitespace-nowrap" onclick="updateChartHealthMetric('hr', this)">心跳</button><button class="chart-filter-h-metric px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] whitespace-nowrap" onclick="updateChartHealthMetric('glucose', this)">血糖</button><button class="chart-filter-h-metric px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] whitespace-nowrap" onclick="updateChartHealthMetric('steps', this)">步數</button></div>
+                            <div class="flex gap-2 justify-end"><button class="chart-filter-h-time active text-[9px] text-blue-600 font-bold underline" onclick="updateChartHealthTime(7, this)">7天</button><button class="chart-filter-h-time text-[9px] text-gray-400" onclick="updateChartHealthTime(14, this)">14天</button><button class="chart-filter-h-time text-[9px] text-gray-400" onclick="updateChartHealthTime(30, this)">30天</button></div>
+                        </div>
+                        <div class="h-56 w-full"><canvas id="analysisChart"></canvas></div>
+                    </div>
+                    <!-- 健康洞察 -->
+                    <div class="bg-gradient-to-br from-white to-[#e0f7fa] p-4 rounded-xl shadow-sm border border-cyan-100">
+                        <h3 class="font-bold text-gray-700 mb-2 flex items-center gap-2"><i class="fas fa-robot text-blue-500"></i> AI 健康趨勢洞察</h3>
+                        <p id="ai-insight-text" class="text-xs text-gray-600 leading-relaxed">AI 分析：您的<span class="font-bold text-mvp-main">注意力</span>近期表現穩定上升。若想進一步突破，建議在早上 10 點前進行「視覺追蹤」訓練，效果最佳。</p>
+                    </div>
+                    <!-- 歷史紀錄 -->
+                    <div onclick="openHistoryDetail()" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer active:bg-gray-50 transition flex justify-between items-center group"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-mvp-main group-hover:text-white transition"><i class="fas fa-list"></i></div><div><h3 class="font-bold text-gray-700 text-sm">歷史健康紀錄</h3><p class="text-[10px] text-gray-400">查看近三個月生理數據 (180筆)</p></div></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                </div>
+            </div>
+
+            <!-- VIEW: 歷史紀錄詳情 -->
+            <div id="view-history-detail" class="view-section hidden p-0 h-full flex flex-col bg-gray-50">
+                <div class="p-4 bg-white border-b flex items-center gap-3 shadow-sm z-10"><button onclick="switchView('analysis')"><i class="fas fa-arrow-left text-gray-600"></i></button><h2 class="font-bold text-lg text-gray-800">歷史紀錄 (近3個月)</h2></div>
+                <div id="history-list-container" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar pb-24"></div>
+            </div>
+
+            <!-- VIEW 5: 我的 (Profile - Revamp) -->
+            <div id="view-profile" class="view-section hidden p-4 space-y-4 h-full flex flex-col bg-gray-50">
+                <div class="bg-white p-6 rounded-xl shadow-sm text-center">
+                    <div class="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-3 overflow-hidden"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" /></div>
+                    <h3 class="font-bold text-lg">王大明</h3><p class="text-xs text-gray-500">會員ID: 8829103</p>
+                </div>
+                <div class="space-y-4 overflow-y-auto no-scrollbar pb-20">
+                    <!-- Group 1 -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-3 border-b border-gray-100 font-bold text-xs text-gray-500 bg-gray-50 px-4">帳戶設定</div>
+                        <div onclick="openProfileSubView('basic')" class="p-4 flex justify-between items-center active:bg-gray-50 cursor-pointer"><div class="flex items-center gap-3"><i class="fas fa-user-edit text-mvp-main w-5 text-center"></i> <span class="text-sm font-bold text-gray-700">基本資料設定</span></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                    </div>
+                    <!-- Group 2 -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-3 border-b border-gray-100 font-bold text-xs text-gray-500 bg-gray-50 px-4">授權與管理</div>
+                        <div onclick="openProfileSubView('auth')" class="p-4 border-b border-gray-100 flex justify-between items-center active:bg-gray-50 cursor-pointer"><div class="flex items-center gap-3"><i class="fas fa-shield-alt text-mvp-main w-5 text-center"></i> <span class="text-sm font-bold text-gray-700">授權同意</span></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                        <div onclick="openProfileSubView('notify')" class="p-4 flex justify-between items-center active:bg-gray-50 cursor-pointer"><div class="flex items-center gap-3"><i class="fas fa-bell text-mvp-main w-5 text-center"></i> <span class="text-sm font-bold text-gray-700">通知設定</span></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                    </div>
+                    <!-- Group 3 -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-3 border-b border-gray-100 font-bold text-xs text-gray-500 bg-gray-50 px-4">紀錄查看</div>
+                        <div onclick="openProfileSubView('records-interaction')" class="p-4 border-b border-gray-100 flex justify-between items-center active:bg-gray-50 cursor-pointer"><div class="flex items-center gap-3"><i class="fas fa-history text-mvp-main w-5 text-center"></i> <span class="text-sm font-bold text-gray-700">互動紀錄列表</span></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                        <div onclick="openProfileSubView('records-task')" class="p-4 border-b border-gray-100 flex justify-between items-center active:bg-gray-50 cursor-pointer"><div class="flex items-center gap-3"><i class="fas fa-tasks text-mvp-main w-5 text-center"></i> <span class="text-sm font-bold text-gray-700">任務完成紀錄</span></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                        <div onclick="openProfileSubView('records-points')" class="p-4 flex justify-between items-center active:bg-gray-50 cursor-pointer"><div class="flex items-center gap-3"><i class="fas fa-coins text-mvp-main w-5 text-center"></i> <span class="text-sm font-bold text-gray-700">積分帳務明細</span></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                    </div>
+                    <!-- Group 4: Support -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-3 border-b border-gray-100 font-bold text-xs text-gray-500 bg-gray-50 px-4">協助與支援</div>
+                        <div onclick="openProfileSubView('service')" class="p-4 flex justify-between items-center active:bg-gray-50 cursor-pointer"><div class="flex items-center gap-3"><i class="fas fa-headset text-mvp-main w-5 text-center"></i> <span class="text-sm font-bold text-gray-700">客服中心</span></div><i class="fas fa-chevron-right text-gray-300 text-xs"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile SubViews Container -->
+            <div id="profile-subviews-container" class="absolute inset-0 z-50 bg-gray-50 flex flex-col hidden animate-slide-up">
+                <div id="subview-header" class="p-4 bg-white border-b flex items-center gap-3 shadow-sm z-10"><button onclick="closeProfileSubView()"><i class="fas fa-arrow-left text-gray-600"></i></button><h2 class="font-bold text-lg text-gray-800" id="subview-title">標題</h2></div>
+                <div id="subview-content" class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar pb-24"></div>
+            </div>
+
+            <!-- MODALS & OVERLAYS (Existing) -->
+            <div id="view-leaderboard" class="absolute inset-0 bg-white z-50 flex flex-col hidden">
+                <div class="p-4 border-b flex items-center gap-2"><button onclick="closeLeaderboard()"><i class="fas fa-arrow-left"></i></button><h3 class="font-bold">排行榜</h3></div>
+                <div class="p-6 text-center space-y-6">
+                    <div class="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto text-4xl">👑</div>
+                    <div><h2 class="text-2xl font-bold text-gray-800" id="lb-game-name">記憶力</h2><p class="text-sm text-gray-500">您的最佳成績</p></div>
+                    <div class="text-5xl font-bold text-mvp-main" id="lb-score">92</div>
+                    <div class="bg-gray-50 p-4 rounded-xl"><p class="text-sm text-gray-600">您的表現優於 <span class="font-bold text-mvp-main">85%</span> 的同齡使用者</p></div>
+                </div>
+            </div>
+            
+            <div id="view-store-game" class="absolute inset-0 bg-[#fffbeb] z-50 flex flex-col hidden">
+                <div class="p-4 border-b border-orange-100 flex justify-between items-center bg-white/80 backdrop-blur-sm"><button onclick="closeStoreGame()" class="text-gray-400"><i class="fas fa-times"></i></button><div class="font-bold text-gray-800">幸福柑仔店</div><div class="text-xs font-bold text-orange-500 bg-orange-100 px-2 py-1 rounded-full" id="store-level-indicator">關卡 1/8</div></div>
+                <div class="flex-1 p-6 flex flex-col justify-center overflow-y-auto" id="store-game-content"></div>
+            </div>
+
+            <div id="view-mood-chat" class="absolute inset-0 bg-white z-50 flex flex-col hidden">
+                <div class="p-4 border-b bg-pink-50 flex justify-between items-center"><button onclick="closeMoodChat()" class="text-gray-400"><i class="fas fa-times"></i></button><div class="font-bold text-gray-800">小樂的心情溫度計</div><div class="w-6"></div></div>
+                <div id="mood-chat-history" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 pb-32"></div>
+                <div id="mood-chat-controls" class="absolute bottom-0 left-0 w-full bg-white border-t p-4 pb-12 shadow-lg"></div>
+            </div>
+
+            <div id="checkinModal" class="absolute inset-0 bg-black/50 z-50 hidden items-end justify-center">
+                <div class="bg-white w-full rounded-t-3xl p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
+                    <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-lg text-gray-800">📝 快速打卡</h3><button onclick="toggleModal(false)" class="text-2xl text-gray-400 font-light">×</button></div>
+                    <div class="space-y-5">
+                        <div><label class="block text-sm font-bold text-gray-700 mb-2">今天心情如何？</label><div class="flex justify-between px-2 text-3xl"><span>😀</span><span>🙂</span><span>😐</span><span>😟</span><span>😫</span></div></div>
+                        <button class="w-full bg-mvp-main text-white py-3 rounded-full font-bold shadow-lg" onclick="toggleModal(false); alert('打卡成功！詳細數據請至分析頁籤輸入。');">提交</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="absolute bottom-0 w-full bg-white border-t border-gray-100 h-16 flex justify-around items-center z-40">
+            <button onclick="switchView('home')" class="nav-item flex flex-col items-center text-mvp-main w-1/5" id="nav-home"><i class="fas fa-home text-lg mb-0.5"></i><span class="text-[10px]">首頁</span></button>
+            <button onclick="switchView('training')" class="nav-item flex flex-col items-center text-gray-400 w-1/5" id="nav-training"><i class="fas fa-dumbbell text-lg mb-0.5"></i><span class="text-[10px]">訓練</span></button>
+            <button onclick="switchView('screening')" class="nav-item flex flex-col items-center text-gray-400 w-1/5" id="nav-screening"><i class="fas fa-clipboard-check text-lg mb-0.5"></i><span class="text-[10px]">篩檢</span></button>
+            <button onclick="switchView('analysis')" class="nav-item flex flex-col items-center text-gray-400 w-1/5" id="nav-analysis"><i class="fas fa-chart-pie text-lg mb-0.5"></i><span class="text-[10px]">分析</span></button>
+            <button onclick="switchView('profile')" class="nav-item flex flex-col items-center text-gray-400 w-1/5" id="nav-profile"><i class="fas fa-user text-lg mb-0.5"></i><span class="text-[10px]">我的</span></button>
+        </nav>
+        <div class="absolute bottom-1.5 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-gray-800 rounded-full z-50"></div>
+    </div>
+
+    <script>
+        // ================= ARTICLES LOGIC (NEW) =================
+        const articlesData = [
+            { title: "失智症的早期十大警訊", date: "2025/01/10", category: "疾病認識", id: 1 },
+            { title: "預防大腦退化：地中海飲食怎麼吃？", date: "2025/01/05", category: "健康飲食", id: 2 },
+            { title: "長輩記憶力變差？利用 AD8 量表自我檢測", date: "2024/12/28", category: "篩檢工具", id: 3 },
+            { title: "規律運動對大腦的好處：每週 150 分鐘", date: "2024/12/15", category: "運動保健", id: 4 },
+            { title: "如何與失智症長輩溝通？照護技巧分享", date: "2024/12/01", category: "照護資源", id: 5 }
+        ];
+
+        function renderArticles() {
+            const homeContainer = document.getElementById('home-articles-container');
+            const allContainer = document.getElementById('all-articles-container');
+            
+            if(!homeContainer || !allContainer) return;
+
+            // Render Home (Top 3)
+            let homeHtml = '';
+            articlesData.slice(0, 3).forEach(art => {
+                homeHtml += `
+                    <div class="p-3 border-b last:border-b-0 border-gray-50 hover:bg-gray-50 transition cursor-pointer" onclick="alert('開啟文章：${art.title}')">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-[9px] bg-femh-100 text-femh-600 px-1.5 py-0.5 rounded font-bold mb-1 inline-block">${art.category}</span>
+                                <h4 class="font-bold text-xs text-gray-800 leading-snug">${art.title}</h4>
+                            </div>
+                            <span class="text-[9px] text-gray-400 whitespace-nowrap">${art.date}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            homeContainer.innerHTML = homeHtml;
+
+            // Render All
+            let allHtml = '';
+            articlesData.forEach(art => {
+                allHtml += `
+                    <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition cursor-pointer" onclick="alert('開啟文章：${art.title}')">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-[10px] bg-femh-100 text-femh-600 px-2 py-1 rounded-full font-bold">${art.category}</span>
+                            <span class="text-[10px] text-gray-400">${art.date}</span>
+                        </div>
+                        <h3 class="font-bold text-sm text-gray-800 mb-2">${art.title}</h3>
+                        <div class="flex items-center text-[10px] text-gray-400 gap-1">
+                            <span>亞東醫院神經醫學部</span>
+                            <i class="fas fa-chevron-right ml-auto"></i>
+                        </div>
+                    </div>
+                `;
+            });
+            allContainer.innerHTML = allHtml;
+        }
+
+        // ================= NAVIGATION =================
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${viewId}`)?.classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.classList.remove('text-mvp-main'); btn.classList.add('text-gray-400');
+            });
+            const activeNav = document.getElementById(`nav-${viewId}`);
+            if(activeNav) { activeNav.classList.remove('text-gray-400'); activeNav.classList.add('text-mvp-main'); }
+
+            if(viewId === 'analysis') { toggleChartMode('brain'); }
+        }
+
+        function toggleModal(show) {
+            const modal = document.getElementById('checkinModal');
+            if(show) modal.classList.add('active'); else modal.classList.remove('active');
+        }
+
+        function openHistoryDetail() {
+            switchView('history-detail');
+            const container = document.getElementById('history-list-container');
+            container.innerHTML = '';
+            const moods = ['😀', '🙂', '😐', '😟'];
+            for(let i=0; i<20; i++) {
+                const date = new Date(); date.setDate(date.getDate() - i);
+                const dateStr = `${date.getMonth()+1}/${date.getDate()}`;
+                const sys = 110 + Math.floor(Math.random()*20); const dia = 70 + Math.floor(Math.random()*15); const hr = 65 + Math.floor(Math.random()*15); const steps = 4000 + Math.floor(Math.random()*5000); const mood = moods[Math.floor(Math.random()*moods.length)];
+                container.insertAdjacentHTML('beforeend', `<div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-2"><div class="flex justify-between items-center border-b border-gray-50 pb-2"><span class="text-xs font-bold text-gray-600">${dateStr}</span><span class="text-lg">${mood}</span></div><div class="grid grid-cols-3 gap-2 text-center"><div class="bg-gray-50 rounded p-2"><p class="text-[10px] text-gray-400">血壓</p><p class="text-xs font-bold text-gray-700">${sys}/${dia}</p></div><div class="bg-gray-50 rounded p-2"><p class="text-[10px] text-gray-400">心跳</p><p class="text-xs font-bold text-gray-700">${hr}</p></div><div class="bg-gray-50 rounded p-2"><p class="text-[10px] text-gray-400">步數</p><p class="text-xs font-bold text-orange-500">${steps}</p></div></div></div>`);
+            }
+            container.insertAdjacentHTML('beforeend', `<div class="text-center text-xs text-gray-400 py-4">已顯示近 20 筆 (共 180 筆)</div>`);
+        }
+
+        // ================= SERVICE LOGIC (NEW) =================
+        let serviceTickets = [
+            { id: 'T2026011001', date: '2026/01/10', category: '帳號與認證', content: '請問如何修改我的綁定手機號碼？目前找不到選項。', status: '已回覆', reply: '親愛的用戶您好，請至「我的 > 帳號設定」中點擊手機號碼欄位進行驗證修改。' },
+            { id: 'T2026011202', date: '2026/01/12', category: '活動相關', content: '參加步數挑戰活動，但點數沒有入帳，請協助確認。', status: '處理中', reply: null }
+        ];
+
+        function renderServiceTabs(activeTab) {
+            const container = document.getElementById('subview-content');
+            
+            // Tab Header
+            let html = `
+                <div class="flex bg-gray-100 p-1 rounded-lg mb-4">
+                    <button onclick="renderServiceTabs('contact')" class="flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'contact' ? 'bg-white shadow-sm text-mvp-main' : 'text-gray-500'}">我要提問</button>
+                    <button onclick="renderServiceTabs('history')" class="flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white shadow-sm text-mvp-main' : 'text-gray-500'}">提問紀錄</button>
+                </div>
+            `;
+
+            // Content
+            if (activeTab === 'contact') {
+                html += `
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-4 animate-fade-in">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-gray-700">問題分類</label>
+                            <select id="svc-cat" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-mvp-main">
+                                <option>帳號與認證</option><option>健康數據異常</option><option>活動相關</option><option>其他建議</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1 relative">
+                            <label class="text-xs font-bold text-gray-700">問題描述</label>
+                            <textarea id="svc-desc" rows="5" maxlength="500" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-mvp-main" placeholder="請詳細描述您遇到的問題..."></textarea>
+                            <span class="absolute bottom-2 right-2 text-[10px] text-gray-400">0/500</span>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-gray-700">附件上傳 (選填)</label>
+                            <div class="flex items-center gap-3">
+                                <button onclick="alert('模擬選擇檔案 (最多3張, 單檔5MB)')" class="w-20 h-20 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:bg-gray-50"><i class="fas fa-plus text-lg"></i><span class="text-[9px] mt-1">上傳圖片</span></button>
+                                <div class="text-[10px] text-gray-400">支援 JPG, PNG<br>單檔上限 5MB</div>
+                            </div>
+                        </div>
+                        <button onclick="submitTicket()" class="w-full bg-mvp-main text-white py-3 rounded-xl font-bold shadow-md active:scale-95 transition mt-2">送出提問</button>
+                    </div>
+                `;
+            } else {
+                html += `<div class="space-y-3 animate-fade-in">`;
+                if(serviceTickets.length === 0) {
+                    html += `<div class="text-center py-10 text-gray-400 text-sm">目前沒有提問紀錄</div>`;
+                } else {
+                    serviceTickets.forEach((t, idx) => {
+                        const statusColor = t.status === '已回覆' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600';
+                        html += `
+                            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div><span class="text-[10px] text-gray-400">${t.date}</span><h4 class="font-bold text-sm text-gray-800">${t.category}</h4></div>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${statusColor}">${t.status}</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mb-3 line-clamp-2">${t.content}</p>
+                                ${t.reply ? `
+                                    <div class="bg-gray-50 p-3 rounded-lg text-xs text-gray-600">
+                                        <p class="font-bold text-mvp-main mb-1"><i class="fas fa-headset mr-1"></i>客服回覆：</p>
+                                        ${t.reply}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    });
+                }
+                html += `</div>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function submitTicket() {
+            const cat = document.getElementById('svc-cat').value;
+            const desc = document.getElementById('svc-desc').value;
+            if(!desc) { alert('請輸入問題描述'); return; }
+
+            const newId = 'T' + new Date().toISOString().slice(0,10).replace(/-/g,'') + Math.floor(Math.random()*1000);
+            serviceTickets.unshift({
+                id: newId,
+                date: new Date().toISOString().slice(0,10).replace(/-/g,'/'),
+                category: cat,
+                content: desc,
+                status: '處理中',
+                reply: null
+            });
+
+            alert('提問已送出！我們會盡快回覆您。');
+            renderServiceTabs('history');
+        }
+
+        // ================= PROFILE SUB-VIEWS LOGIC (Updated) =================
+        function openProfileSubView(type) {
+            const container = document.getElementById('profile-subviews-container');
+            const content = document.getElementById('subview-content');
+            const title = document.getElementById('subview-title');
+            container.classList.remove('hidden');
+
+            if (type === 'basic') {
+                title.innerText = "基本資料設定";
+                content.innerHTML = `
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border space-y-4">
+                        <div class="space-y-1"><label class="text-[10px] text-gray-400">暱稱</label><input type="text" class="w-full border-b py-2 text-sm outline-none font-medium" value="王大明"></div>
+                        <div class="space-y-1"><label class="text-[10px] text-gray-400">會員 ID (唯讀)</label><input type="text" class="w-full border-b py-2 text-sm outline-none text-gray-400" value="8829103" readonly></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="space-y-1"><label class="text-[10px] text-gray-400">身高 (cm)</label><input type="number" class="w-full border-b py-2 text-sm outline-none font-medium" value="175"></div>
+                            <div class="space-y-1"><label class="text-[10px] text-gray-400">體重 (kg)</label><input type="number" class="w-full border-b py-2 text-sm outline-none font-medium" value="75"></div>
+                        </div>
+                        <div class="space-y-1"><label class="text-[10px] text-gray-400">生日</label><input type="date" class="w-full border-b py-2 text-sm outline-none" value="1958-05-20"></div>
+                    </div>
+                    <button class="w-full bg-mvp-main text-white py-3 rounded-xl font-bold shadow-md" onclick="alert('資料已更新！'); closeProfileSubView()">儲存變更</button>
+                `;
+            } else if (type === 'auth') {
+                title.innerText = "授權同意";
+                content.innerHTML = `
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border space-y-5">
+                        <div class="flex justify-between items-center">
+                            <div><p class="text-sm font-bold text-gray-800">相機權限</p><p class="text-[10px] text-gray-400">用於 AI 餐點分析與辨識</p></div>
+                            <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" checked onchange="if(!this.checked) alert('注意：關閉相機權限將導致無法使用 AI 餐點分析功能！')"><div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-mvp-main"></div></label>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div><p class="text-sm font-bold text-gray-800">健康數據同步</p><p class="text-[10px] text-gray-400">讀取步數、心跳等生理資訊</p></div>
+                            <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-mvp-main after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div></label>
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'notify') {
+                title.innerText = "通知設定";
+                content.innerHTML = `
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border space-y-5">
+                        <div class="flex justify-between items-center">
+                            <div><p class="text-sm font-bold text-gray-800">推播通知總開關</p><p class="text-[10px] text-gray-400">接收健康提醒與任務通知</p></div>
+                            <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" checked><div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-mvp-main after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div></label>
+                        </div>
+                        <div class="pt-4 border-t border-gray-100">
+                             <p class="text-xs font-bold text-gray-600 mb-2">提醒頻率</p>
+                             <select class="w-full p-3 bg-gray-50 rounded-lg text-sm border-none outline-none"><option>每日一次 (建議)</option><option>每週一次</option><option>僅重要通知</option></select>
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'service') {
+                title.innerText = "客服中心";
+                renderServiceTabs('contact');
+            } else if (type.startsWith('records')) {
+                const recordType = type.split('-')[1];
+                let listHtml = '';
+                if(recordType === 'interaction') {
+                    title.innerText = "互動紀錄列表";
+                    listHtml = Array(5).fill(0).map((_,i) => `<div class="bg-white p-3 rounded-lg border border-gray-100 flex justify-between items-center"><div class="flex gap-3 items-center"><div class="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center text-purple-500"><i class="fas fa-gamepad"></i></div><div><p class="text-xs font-bold">記憶力訓練</p><p class="text-[10px] text-gray-400">2026/01/${20-i}</p></div></div><span class="text-sm font-bold text-mvp-main">92分</span></div>`).join('');
+                } else if(recordType === 'task') {
+                    title.innerText = "任務完成紀錄";
+                    listHtml = Array(5).fill(0).map((_,i) => `<div class="bg-white p-3 rounded-lg border border-gray-100 flex justify-between items-center"><div class="flex gap-3 items-center"><div class="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-500"><i class="fas fa-check"></i></div><div><p class="text-xs font-bold">每日健康日誌</p><p class="text-[10px] text-gray-400">2026/01/${20-i}</p></div></div><span class="text-xs text-gray-400">已完成</span></div>`).join('');
+                } else {
+                    title.innerText = "積分帳務明細";
+                    listHtml = Array(5).fill(0).map((_,i) => `<div class="bg-white p-3 rounded-lg border border-gray-100 flex justify-between items-center"><div class="flex gap-3 items-center"><div class="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-orange-500"><i class="fas fa-coins"></i></div><div><p class="text-xs font-bold">完成訓練獎勵</p><p class="text-[10px] text-gray-400">2026/01/${20-i}</p></div></div><span class="text-sm font-bold text-orange-500">+20</span></div>`).join('');
+                }
+                content.innerHTML = `<div class="space-y-2">${listHtml}</div>`;
+            }
+        }
+        
+        function closeProfileSubView() {
+            document.getElementById('profile-subviews-container').classList.add('hidden');
+        }
+
+        // ================= ANALYSIS LOGIC (Kept same) =================
+        let analysisChart = null;
+        let currentHealthMetric = 'bp'; 
+        let currentHealthDays = 7;
+
+        function completeSetup() {
+            const h = document.getElementById('setup-height').value;
+            const w = document.getElementById('setup-weight').value;
+            if(h && w) { document.getElementById('input-setup-mode').classList.add('hidden'); document.getElementById('input-daily-mode').classList.remove('hidden'); alert(`基本資料已建立：${h}cm / ${w}kg`); } else { alert('請輸入身高與體重'); }
+        }
+        
+        function selectMood(btn) {
+            document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('bg-yellow-100', 'border-yellow-400'));
+            btn.classList.add('bg-yellow-100', 'border-yellow-400');
+        }
+
+        function simulateLinkDevice(type) {
+            const btn = event.currentTarget; const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 同步中...';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check"></i> 已更新';
+                btn.classList.add('text-green-600');
+                if(type === 'Step') {
+                    document.getElementById('analysis-steps').value = 8542;
+                } else if (type === 'Health') {
+                    document.getElementById('daily-sys').value = 118;
+                    document.getElementById('daily-dia').value = 78;
+                    document.getElementById('daily-bpm').value = 72;
+                    document.getElementById('daily-glucose').value = 98;
+                    document.getElementById('daily-sleep').value = 7.5;
+                }
+                setTimeout(() => { btn.innerHTML = originalText; btn.classList.remove('text-green-600'); }, 2000);
+            }, 1200);
+        }
+        function toggleChartMode(mode) {
+            const btnBrain = document.getElementById('mode-brain'); const btnHealth = document.getElementById('mode-health');
+            const filtersBrain = document.getElementById('filters-brain'); const filtersHealth = document.getElementById('filters-health');
+            if (mode === 'brain') {
+                btnBrain.classList.replace('text-gray-500', 'text-mvp-main'); btnBrain.classList.replace('font-medium', 'font-bold'); btnBrain.classList.add('bg-white', 'shadow-sm');
+                btnHealth.classList.replace('text-mvp-main', 'text-gray-500'); btnHealth.classList.replace('font-bold', 'font-medium'); btnHealth.classList.remove('bg-white', 'shadow-sm');
+                filtersBrain.classList.remove('hidden'); filtersBrain.classList.add('flex'); filtersHealth.classList.add('hidden'); filtersHealth.classList.remove('flex');
+                updateChartData('brain', 'attention');
+            } else {
+                btnHealth.classList.replace('text-gray-500', 'text-mvp-main'); btnHealth.classList.replace('font-medium', 'font-bold'); btnHealth.classList.add('bg-white', 'shadow-sm');
+                btnBrain.classList.replace('text-mvp-main', 'text-gray-500'); btnBrain.classList.replace('font-bold', 'font-medium'); btnBrain.classList.remove('bg-white', 'shadow-sm');
+                filtersHealth.classList.remove('hidden'); filtersHealth.classList.add('flex'); filtersBrain.classList.add('hidden'); filtersBrain.classList.remove('flex');
+                updateChartData('health', 7);
+            }
+        }
+
+        // Logic for Health Chart Filters (Metric & Time)
+        function updateChartHealthMetric(metric, btn) {
+            currentHealthMetric = metric;
+            document.querySelectorAll('.chart-filter-h-metric').forEach(b => {
+                b.classList.remove('bg-blue-500', 'text-white');
+                b.classList.add('bg-gray-100', 'text-gray-500');
+            });
+            btn.classList.remove('bg-gray-100', 'text-gray-500');
+            btn.classList.add('bg-blue-500', 'text-white');
+            updateChartData('health', currentHealthDays);
+        }
+
+        function updateChartHealthTime(days, btn) {
+            currentHealthDays = days;
+            document.querySelectorAll('.chart-filter-h-time').forEach(b => {
+                b.classList.remove('underline', 'text-blue-600', 'font-bold');
+                b.classList.add('text-gray-400');
+            });
+            btn.classList.remove('text-gray-400');
+            btn.classList.add('underline', 'text-blue-600', 'font-bold');
+            updateChartData('health', days);
+        }
+
+        function updateChartData(mode, subType) {
+            const ctx = document.getElementById('analysisChart');
+            if(analysisChart) analysisChart.destroy();
+            let labels = [], dataset = [], label = "", color = mode === 'brain' ? '#00b09b' : '#3b82f6';
+            const insightText = document.getElementById('ai-insight-text');
+
+            if (mode === 'brain') {
+                const btnSelector = '.chart-filter';
+                 document.querySelectorAll(btnSelector).forEach(btn => { btn.classList.remove('bg-mvp-main', 'text-white'); btn.classList.add('bg-gray-100', 'text-gray-500'); });
+                if(event && event.target.classList.contains('chart-filter')) {
+                    event.target.classList.remove('bg-gray-100', 'text-gray-500'); event.target.classList.add('bg-mvp-main', 'text-white');
+                }
+
+                labels = ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9', 'G10'];
+                if(subType === 'attention') { 
+                    dataset = [70,72,75,74,78,80,82,81,85,88]; label = '注意力 (分)'; 
+                    if(insightText) insightText.innerHTML = `AI 分析：您的<span class="font-bold text-mvp-main">注意力分數</span>在過去 5 次訓練中穩定上升。建議在早上精神好時進行訓練，效果最佳。`;
+                }
+                else if(subType === 'executive') { 
+                    dataset = [60,65,62,68,70,75,73,78,80,82]; label = '執行力 (分)';
+                    if(insightText) insightText.innerHTML = `AI 分析：您的<span class="font-bold text-mvp-main">執行力</span>略有波動。研究指出，午睡 20 分鐘有助於提升下午的決策執行效率。`;
+                }
+                else if(subType === 'focus') { 
+                    dataset = [50,55,60,65,70,72,75,80,82,85]; label = '專注力 (分)';
+                    if(insightText) insightText.innerHTML = `AI 分析：<span class="font-bold text-mvp-main">專注力</span>維持在高檔。若感到疲勞，請適度休息，避免過度用腦導致效率下降。`;
+                }
+            } else {
+                let days = subType; 
+                for(let i=1; i<=days; i++) labels.push(`D${i}`);
+                
+                if (currentHealthMetric === 'bp') {
+                    label = `收縮壓 (mmHg)`;
+                    for(let i=0; i<days; i++) dataset.push(118 + Math.floor(Math.random() * 10 - 5));
+                    if(insightText) insightText.innerHTML = `AI 分析：您的<span class="font-bold text-blue-500">血壓</span>控制在正常範圍內。規律的有氧運動（如快走）有助於維持穩定的血壓數值。`;
+                } else if (currentHealthMetric === 'hr') {
+                    label = `心跳 (BPM)`;
+                    for(let i=0; i<days; i++) dataset.push(72 + Math.floor(Math.random() * 8 - 4));
+                    if(insightText) insightText.innerHTML = `AI 分析：<span class="font-bold text-blue-500">靜止心率</span>平均為 72 bpm，屬於健康範疇。若心率異常升高，請檢視是否壓力過大或睡眠不足。`;
+                } else if (currentHealthMetric === 'glucose') {
+                    label = `血糖 (mg/dL)`;
+                    for(let i=0; i<days; i++) dataset.push(95 + Math.floor(Math.random() * 15 - 5));
+                    if(insightText) insightText.innerHTML = `AI 分析：<span class="font-bold text-blue-500">血糖</span>數值平穩。建議維持定時定量的飲食習慣，並減少精緻糖分的攝取。`;
+                } else if (currentHealthMetric === 'steps') {
+                    label = `步數`;
+                    for(let i=0; i<days; i++) dataset.push(5000 + Math.floor(Math.random() * 4000));
+                    if(insightText) insightText.innerHTML = `AI 分析：您的<span class="font-bold text-blue-500">步數</span>活躍度極佳！每日步行超過 7000 步可有效降低心血管疾病風險。`;
+                }
+            }
+
+            analysisChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: [{ label: label, data: dataset, borderColor: color, backgroundColor: color + '10', fill: true, tension: 0.4, pointRadius: 2 }] },
+                options: { maintainAspectRatio: false, plugins: { legend: { display: true } }, scales: { y: { beginAtZero: false } } }
+            });
+        }
+
+        // ================= STORE GAME LOGIC =================
+        let storeLevel = 0;
+        const storeLevels = [
+            { title: "開店準備", desc: "請確認今天的日期", type: "date", img: "https://i.ibb.co/tPL55zbn/01.jpg" },
+            { title: "進貨決策", desc: "電話響了：『老闆！有一批超便宜的貨要不要？先匯款給我！』", type: "choice", opts: ["馬上匯款", "拒絕 (這是詐騙)"], ans: 1, img: "https://i.ibb.co/Gz20CrM/02.jpg" },
+            { title: "整理貨架", desc: "以前我很愛研究新擺法...", type: "choice", opts: ["現在懶得弄了", "來擺個新花樣吧！"], ans: 1, img: "https://i.ibb.co/TxVP53Mv/03.jpg" },
+            { title: "鄰居閒聊", desc: "老王說：「昨天我有去公園喔!」，你回應...", type: "choice", opts: ["昨天你去哪裡?", "那公園有什麼新變化嗎"], ans: 1, img: "https://i.ibb.co/pvP0smWT/04.jpg" },
+            { title: "修理電視", desc: "電視變雪花屏了...", type: "action", action: "遙控器：輸入源切換", img: "https://i.ibb.co/TMsXsc5p/05.jpg" },
+            { title: "複雜結帳", desc: "總金額 345 元，客人給 1000 元。", type: "calc", q: "要找多少錢？", ans: 655, img: "https://i.ibb.co/gL3K3hLq/06.jpg" },
+            { title: "預約送貨", desc: "客人：『下午 4 點幫我送米到家』", type: "clock", target: 4, img: "https://i.ibb.co/4wsCKtsp/07.jpg" },
+            { title: "找尋物品", desc: "要關店了，鑰匙不見了！(請選擇正確的區域)", type: "hidden", img: "https://i.ibb.co/5xBC55wP/08.jpg" }
+        ];
+
+        function startStoreGame() {
+            storeLevel = 0;
+            document.getElementById('view-store-game').classList.remove('hidden');
+            renderStoreLevel();
+        }
+        function closeStoreGame() { document.getElementById('view-store-game').classList.add('hidden'); }
+
+        function checkStoreDate() {
+            const m = document.getElementById('sel-month').value;
+            const d = document.getElementById('sel-day').value;
+            const w = document.getElementById('sel-weekday').value;
+            if (m && d && w) {
+                nextStoreLevel(true);
+            } else {
+                alert('請完整選擇日期資訊喔！');
+            }
+        }
+
+        function renderStoreLevel() {
+            if(storeLevel >= storeLevels.length) { renderStoreResult(); return; }
+            const level = storeLevels[storeLevel];
+            document.getElementById('store-level-indicator').innerText = `關卡 ${storeLevel}/7`;
+            const container = document.getElementById('store-game-content');
+            
+            let imgHtml = level.img 
+                ? `<img src="${level.img}" class="game-img" alt="${level.title}">` 
+                : `<div class="placeholder-img" data-label="情境示意圖"><i class="fas fa-store text-gray-300"></i></div>`;
+
+            let html = `<div class="store-card animate-fade-in"><h3 class="font-bold text-xl mb-2 text-center">${level.title}</h3>${imgHtml}<p class="text-sm text-gray-600 mb-6 text-center leading-relaxed">${level.desc}</p>`;
+            
+            if(level.type === 'choice') {
+                html += `<div class="space-y-3">${level.opts.map((o, i) => `<button onclick="nextStoreLevel(${i === level.ans})" class="w-full py-3 border border-orange-200 rounded-xl text-orange-800 font-bold active:bg-orange-50">${o}</button>`).join('')}</div>`;
+            } else if (level.type === 'date') {
+                html += `
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <select id="sel-month" class="p-2 border rounded-lg bg-white text-sm"><option value="">月份</option>${Array.from({length: 12}, (_, i) => `<option value="${i+1}">${i+1}月</option>`).join('')}</select>
+                    <select id="sel-day" class="p-2 border rounded-lg bg-white text-sm"><option value="">日期</option>${Array.from({length: 31}, (_, i) => `<option value="${i+1}">${i+1}日</option>`).join('')}</select>
+                    <select id="sel-weekday" class="p-2 border rounded-lg bg-white text-sm"><option value="">星期</option><option value="1">週一</option><option value="2">週二</option><option value="3">週三</option><option value="4">週四</option><option value="5">週五</option><option value="6">週六</option><option value="0">週日</option></select>
+                </div>
+                <button onclick="checkStoreDate()" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold">確認營業</button>
+                `;
+            } else if (level.type === 'calc') {
+                html += `<input type="number" id="calc-in" class="w-full border p-3 rounded-lg mb-3 text-center" placeholder="輸入金額"><button onclick="checkStoreCalc(${level.ans})" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold">找錢</button>`;
+            } else if (level.type === 'clock') {
+                html += `<button onclick="nextStoreLevel(true)" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold">現在出發</button>`;
+            } else if (level.type === 'action') {
+                html += `<div class="grid grid-cols-2 gap-2"><button class="py-4 bg-gray-800 text-white rounded">電源</button><button onclick="nextStoreLevel(true)" class="py-4 bg-red-500 text-white rounded">輸入源</button></div>`;
+            } else if (level.type === 'hidden') {
+                html += `<div class="space-y-3"><button onclick="nextStoreLevel(false)" class="w-full py-3 border border-orange-200 rounded-xl font-bold">記帳本區</button><button onclick="nextStoreLevel(false)" class="w-full py-3 border border-orange-200 rounded-xl font-bold">算盤區</button><button onclick="nextStoreLevel(true)" class="w-full py-3 border border-orange-200 rounded-xl font-bold">零錢區</button></div>`;
+            }
+            container.innerHTML = html + `</div>`;
+        }
+        function checkStoreCalc(ans) { const val = document.getElementById('calc-in').value; nextStoreLevel(true); }
+        function nextStoreLevel(correct) { storeLevel++; renderStoreLevel(); }
+        function renderStoreResult() { document.getElementById('store-game-content').innerHTML = `<div class="store-card text-center animate-fade-in"><h3 class="font-bold text-2xl text-orange-600 mb-2">營運回顧</h3><p class="text-sm text-gray-600 mb-6">您的判斷力優良，今日共獲得 30 點數！</p><button onclick="closeStoreGame();" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold shadow-lg">打烊休息</button></div>`; }
+
+        // ================= MOOD CHAT ENGINE =================
+        const moodFlow = [
+            { q: "早安！今天過得還好嗎？", opts: ["還不錯", "普通", "有點累"] },
+            { q: "最近心情能量如何呢？", opts: ["有點緊繃", "沒什麼力氣", "心情低低的", "蠻穩定的"] },
+            { q: "昨晚睡得好嗎？", opts: ["一覺到天亮", "普通", "很容易醒來"] },
+            { q: "白天專注力如何？", opts: ["很專心", "偶爾分心", "常常恍神"] }
+        ];
+        let moodStep = 0;
+
+        function startMoodChat() {
+            moodStep = 0;
+            document.getElementById('view-mood-chat').classList.remove('hidden');
+            const history = document.getElementById('mood-chat-history');
+            history.innerHTML = '';
+            renderMoodStep();
+        }
+        function closeMoodChat() { document.getElementById('view-mood-chat').classList.add('hidden'); }
+
+        function renderMoodStep() {
+            const history = document.getElementById('mood-chat-history');
+            const controls = document.getElementById('mood-chat-controls');
+            if(moodStep >= moodFlow.length) {
+                history.insertAdjacentHTML('beforeend', `<div class="flex gap-2 items-end mb-4"><div class="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-500 text-xs font-bold">小樂</div><div class="bg-white p-3 rounded-2xl rounded-bl-none shadow-sm text-sm border border-pink-100">本週心情摘要：看起來您最近睡眠品質稍受影響，建議睡前可以聽點輕音樂放鬆喔！</div></div>`);
+                controls.innerHTML = `<button onclick="closeMoodChat(); alert('完成心情紀錄 +20 Pts')" class="w-full bg-pink-500 text-white py-2 rounded-full font-bold">完成對話</button>`;
+                document.getElementById('recent-activity-text').innerText = "完成心情溫度計 - 情緒穩定";
+                return;
+            }
+            const step = moodFlow[moodStep];
+            setTimeout(() => {
+                history.insertAdjacentHTML('beforeend', `<div class="flex gap-2 items-end mb-4 animate-fade-in"><div class="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-500 text-xs font-bold">小樂</div><div class="bg-white p-3 rounded-2xl rounded-bl-none shadow-sm text-sm border border-pink-100">${step.q}</div></div>`);
+                history.scrollTop = history.scrollHeight;
+            }, 300);
+            controls.innerHTML = `<div class="flex flex-wrap gap-2 justify-center">${step.opts.map(o => `<button onclick="nextMood('${o}')" class="px-4 py-2 bg-white border border-pink-200 text-pink-600 rounded-full text-xs font-bold hover:bg-pink-50">${o}</button>`).join('')}</div>`;
+        }
+
+        function nextMood(ans) {
+            const history = document.getElementById('mood-chat-history');
+            history.insertAdjacentHTML('beforeend', `<div class="flex justify-end mb-4 animate-slide-up"><div class="bg-pink-500 text-white px-4 py-2 rounded-2xl rounded-br-none shadow-sm text-sm">${ans}</div></div>`);
+            moodStep++;
+            renderMoodStep();
+        }
+
+        function simulateGame(type, scoreBase) { alert(`模擬完成「${type}」訓練！\n得分：${scoreBase + Math.floor(Math.random() * 10)}\n樂活點數 +20`); }
+        function showLeaderboard(type) { document.getElementById('view-leaderboard').classList.remove('hidden'); document.getElementById('lb-game-name').innerText = type + "訓練"; document.getElementById('lb-score').innerText = Math.floor(Math.random() * 15 + 80); }
+        function closeLeaderboard() { document.getElementById('view-leaderboard').classList.add('hidden'); }
+
+        window.onload = function() { 
+            switchView('home');
+            renderArticles(); 
+        };
+    </script>
+</body>
+</html>
